@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ImageNest - Sell-Ready PNG Automation</title>
+    <meta name="description" content="Create sell-ready PNG images for marketplaces like PNGTree and Etsy in minutes without manual setup.">
+    
+    <!-- Fonts and Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- FIREBASE SDK (Compat Version for easy implementation) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <style>
+        /* --- CSS VARIABLES (MODERN THEME) --- */
+        :root {
+            --primary: #4F46E5; /* Indigo */
+            --primary-hover: #4338ca;
+            --secondary: #10B981; /* Emerald */
+            --bg-body: #F8FAFC; /* Slate 50 */
+            --bg-card: #FFFFFF;
+            --text-main: #0F172A; /* Slate 900 (Darker for contrast) */
+            --text-sub: #334155; /* Slate 700 */
+            --text-muted: #64748B; /* Slate 500 */
+            --border: #E2E8F0;
+            --success: #22c55e;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --radius: 12px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        a { text-decoration: none; color: inherit; transition: 0.3s; }
+        ul { list-style: none; }
+        img { max-width: 100%; display: block; }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+
+        /* --- BUTTONS --- */
+        .btn {
+            display: inline-block;
+            padding: 14px 32px;
+            background-color: var(--primary);
+            color: var(--white);
+            border-radius: 50px;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2);
+            font-size: 1rem;
+        }
+        .btn:hover { background-color: var(--primary-hover); transform: translateY(-2px); }
+        .btn-outline { background-color: transparent; border: 2px solid var(--primary); color: var(--primary); box-shadow: none; }
+        .btn-outline:hover { background-color: var(--primary); color: var(--white); }
+        .btn-whatsapp { background-color: #25D366; }
+        .btn-whatsapp:hover { background-color: #128C7E; }
+        
+        /* --- HEADER --- */
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 80px;
+        }
+        .logo { 
+            font-size: 1.6rem; 
+            font-weight: 800; 
+            color: var(--text-main); 
+            display: flex; 
+            align-items: center; 
+            gap: 8px;
+        }
+        .logo span { color: var(--primary); }
+        .nav-links { display: flex; gap: 25px; }
+        .nav-links li a { font-weight: 500; color: var(--text-sub); font-size: 0.95rem; }
+        .nav-links li a:hover { color: var(--primary); }
+
+        /* --- HERO SECTION --- */
+        .hero {
+            padding: 80px 0 60px;
+            text-align: center;
+        }
+        .hero h1 { 
+            font-size: 3.2rem; 
+            line-height: 1.2; 
+            margin-bottom: 20px; 
+            color: var(--text-main);
+            letter-spacing: -1px;
+        }
+        .hero p { 
+            font-size: 1.15rem; 
+            color: var(--text-sub); 
+            margin-bottom: 35px; 
+            max-width: 700px; 
+            margin-left: auto; 
+            margin-right: auto;
+        }
+
+        /* --- ANIMATION SHOWCASE --- */
+        .showcase {
+            padding: 40px 0 80px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 40px;
+        }
+        .window-pane {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            position: relative;
+            height: 350px;
+            display: flex;
+            flex-direction: column;
+        }
+        .window-header { background: #F8FAFC; padding: 10px 15px; display: flex; align-items: center; border-bottom: 1px solid var(--border); }
+        .window-dots { display: flex; gap: 6px; margin-right: 15px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .dot.red { background: #EF4444; } .dot.yellow { background: #F59E0B; } .dot.green { background: #10B981; }
+        .window-title { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+        .window-body { flex: 1; padding: 20px; position: relative; overflow: hidden; background: var(--bg-card); }
+
+        /* Animation CSS Logic */
+        .ai-cursor { position: absolute; font-size: 1.5rem; color: #111827; z-index: 50; pointer-events: none; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2)); }
+        .cursor-1 { animation: move1 4s infinite; } .cursor-1 i { animation: clickAnim1 4s infinite; }
+        @keyframes move1 { 0%, 20% { top: 30px; left: 20px; } 25%, 100% { top: 60px; left: 20px; } }
+        @keyframes clickAnim1 { 0%, 19%, 21%, 100% { transform: scale(1); } 20% { transform: scale(0.8); } }
+        .prompt-list { margin-top: 15px; height: 200px; overflow: hidden; position: relative; }
+        .prompt-item { background: #F1F5F9; padding: 8px 12px; margin-bottom: 8px; border-radius: 6px; font-size: 0.8rem; color: var(--text-main); border-left: 3px solid var(--primary); opacity: 0; transform: translateX(-10px); }
+        .prompt-item:nth-child(1) { animation: slideIn 4s infinite; animation-delay: 0.5s; }
+        .prompt-item:nth-child(2) { animation: slideIn 4s infinite; animation-delay: 1.0s; }
+        .prompt-item:nth-child(3) { animation: slideIn 4s infinite; animation-delay: 1.5s; }
+        @keyframes slideIn { 0%, 4% { opacity: 0; transform: translateX(-10px); } 5%, 95% { opacity: 1; transform: translateX(0); } 96%, 100% { opacity: 0; transform: translateX(-10px); } }
+
+        .imgfx-panel { display: flex; flex-direction: column; height: 100%; }
+        .fx-input-area { display: flex; gap: 10px; margin-bottom: 15px; }
+        .fx-input { flex: 1; background: #fff; border: 1px solid var(--border); color: #333; padding: 8px; border-radius: 4px; font-size: 0.8rem; font-family: monospace; }
+        .fx-btn { background: var(--primary); border: none; color: white; padding: 0 15px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+        .fx-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; flex: 1; }
+        .fx-img { background: #E2E8F0; border-radius: 4px; background-size: cover; background-position: center; opacity: 0; transform: scale(0.8); }
+        .cursor-2 { animation: move2 6s infinite; }
+        @keyframes move2 { 0% { top: 30px; left: 50px; } 20% { top: 30px; left: 200px; } 25%, 35% { top: 32px; left: 230px; } 40%, 100% { top: 150px; left: 150px; } }
+        .fx-img:nth-child(1) { animation: popIn 6s infinite; animation-delay: 1.5s; background-image: url('https://picsum.photos/seed/fx1/100/100'); }
+        @keyframes popIn { 0%, 4% { opacity: 0; transform: scale(0.8); } 5%, 95% { opacity: 1; transform: scale(1); } 96%, 100% { opacity: 0; transform: scale(0.8); } }
+
+        .drag-workspace { display: flex; align-items: center; justify-content: space-between; height: 100%; padding: 20px 40px; }
+        .folder-area { position: relative; width: 80px; height: 60px; }
+        .folder-icon { font-size: 3rem; color: #F59E0B; z-index: 1; position: relative; }
+        .draggable-img { position: absolute; width: 20px; height: 20px; background: var(--primary); border-radius: 3px; }
+        .d1 { top: 10px; left: 10px; background: #EF4444; z-index: 2; animation: drag1 8s infinite; }
+        .drop-zone { width: 120px; height: 120px; border: 2px dashed #94A3B8; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94A3B8; }
+        .tree-logo { font-size: 2.5rem; margin-bottom: 5px; color: #10B981; }
+        .earnings-popup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0); background: linear-gradient(135deg, #10B981, #059669); color: white; padding: 15px 25px; border-radius: 50px; font-size: 1.5rem; font-weight: 800; box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4); z-index: 60; display: flex; align-items: center; gap: 10px; animation: showMoney 8s infinite; }
+        .cursor-drag { animation: dragMove 8s infinite; z-index: 100; }
+        @keyframes dragMove { 0% { top: 50%; left: 20%; } 10% { top: 35%; left: 20%; } 30% { top: 50%; left: 80%; } 35% { top: 50%; left: 20%; } 40% { top: 35%; left: 20%; } 60% { top: 50%; left: 80%; } 65% { top: 50%; left: 50%; } 100% { top: 50%; left: 20%; } }
+        @keyframes drag1 { 0% { opacity: 1; top: 35%; left: 20%; transform: scale(1); } 15% { opacity: 1; top: 35%; left: 20%; transform: scale(1.2); } 30% { opacity: 1; top: 50%; left: 80%; transform: scale(1); } 35% { opacity: 0; top: 50%; left: 80%; transform: scale(0); } 40% { opacity: 0; top: 35%; left: 20%; transform: scale(1); } 100% { opacity: 0; } }
+        @keyframes showMoney { 0%, 70% { opacity: 0; transform: translate(-50%, -50%) scale(0); } 80%, 95% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); } }
+        .coming-soon-tag { position: absolute; top: 10px; right: 10px; background: #1E293B; color: #fff; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; border-radius: 4px; z-index: 60; }
+
+        /* --- FEATURES SECTION --- */
+        .features-section { padding: 60px 0; background: #fff; }
+        .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; }
+        .feature-item { display: flex; align-items: flex-start; gap: 15px; }
+        .feature-icon { font-size: 1.2rem; color: var(--primary); margin-top: 5px; background: #e0e7ff; padding: 10px; border-radius: 50%; }
+        .feature-text h3 { font-size: 1.1rem; margin-bottom: 5px; }
+        .feature-text p { font-size: 0.95rem; color: var(--text-sub); }
+
+        /* --- PRICING --- */
+        .pricing { padding: 80px 0; }
+        .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; max-width: 900px; margin: 0 auto; }
+        .pricing-card { background: var(--bg-card); padding: 40px; border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--border); text-align: center; }
+        .pricing-card h3 { font-size: 1.5rem; margin-bottom: 10px; }
+        .pricing-desc { color: var(--text-sub); font-size: 0.95rem; margin-bottom: 30px; }
+        .payment-details { background: #f8fafc; padding: 20px; border-radius: 8px; margin-top: 20px; text-align: center; font-size: 0.9rem; border: 1px solid var(--border); }
+
+        /* --- DASHBOARD --- */
+        .dashboard-container { padding: 60px 0; }
+        .dash-grid { display: grid; grid-template-columns: 250px 1fr; gap: 30px; }
+        .sidebar { background: var(--bg-card); padding: 20px; border-radius: var(--radius); box-shadow: var(--shadow); height: fit-content; }
+        .sidebar ul li { padding: 10px; cursor: pointer; border-radius: var(--radius); margin-bottom: 5px; }
+        .sidebar ul li:hover, .sidebar ul li.active { background-color: #e0e7ff; color: var(--primary); }
+        .dash-content { background: var(--bg-card); padding: 30px; border-radius: var(--radius); box-shadow: var(--shadow); }
+        .license-box { background: #0f172a; color: #10B981; padding: 20px; font-family: monospace; border-radius: var(--radius); margin: 20px 0; word-break: break-all; }
+        .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .status-active { background: #dcfce7; color: #166534; }
+        .status-expired { background: #fee2e2; color: #991b1b; }
+
+        /* --- MODALS --- */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000; opacity: 0; visibility: hidden; transition: 0.3s; }
+        .modal-overlay.open { opacity: 1; visibility: visible; }
+        .modal { background: var(--bg-card); padding: 30px; border-radius: var(--radius); width: 90%; max-width: 400px; position: relative; }
+        .close-modal { position: absolute; top: 15px; right: 15px; cursor: pointer; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 0.9rem; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; }
+        .toast { position: fixed; bottom: 20px; right: 20px; background: #1e293b; color: #fff; padding: 12px 20px; border-radius: 8px; transform: translateY(100px); transition: 0.3s; z-index: 3000; }
+        .toast.show { transform: translateY(0); }
+
+        /* --- FOOTER --- */
+        footer { background: #1E293B; color: #fff; padding: 40px 0; margin-top: auto; }
+        .admin-link { color: #475569; font-size: 0.8rem; cursor: pointer; margin-top: 20px; display: inline-block; text-decoration: underline; }
+
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.2rem; }
+            .showcase, .dash-grid { grid-template-columns: 1fr; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="toast" class="toast">Action Successful</div>
+
+    <!-- AUTH MODALS -->
+    <div id="loginModal" class="modal-overlay">
+        <div class="modal">
+            <i class="fas fa-times close-modal" onclick="toggleModal('loginModal')"></i>
+            <h2 class="mb-2" style="margin-bottom:15px;">Welcome Back</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="loginEmail" required placeholder="user@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="loginPass" required placeholder="******">
+                </div>
+                <button type="submit" class="btn" style="width:100%">Login</button>
+            </form>
+            <p class="mt-2 text-center" style="margin-top:15px;">Don't have an account? <a href="#" style="color:var(--primary)" onclick="switchAuth('register')">Register</a></p>
+        </div>
+    </div>
+
+    <div id="registerModal" class="modal-overlay">
+        <div class="modal">
+            <i class="fas fa-times close-modal" onclick="toggleModal('registerModal')"></i>
+            <h2 class="mb-2" style="margin-bottom:15px;">Start Free Trial</h2>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="regName" required placeholder="John Doe">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="regEmail" required placeholder="user@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="regPass" required placeholder="******">
+                </div>
+                <button type="submit" class="btn" style="width:100%">Start 3-Day Free Trial</button>
+            </form>
+            <p class="mt-2 text-center" style="margin-top:15px;">Already have an account? <a href="#" style="color:var(--primary)" onclick="switchAuth('login')">Login</a></p>
+        </div>
+    </div>
+
+    <div id="adminModal" class="modal-overlay">
+        <div class="modal">
+            <i class="fas fa-times close-modal" onclick="toggleModal('adminModal')"></i>
+            <h2 class="mb-2">Admin Panel</h2>
+            <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:15px;">Search user email and upgrade plan manually.</p>
+            <form id="adminForm">
+                <div class="form-group">
+                    <label>User Email</label>
+                    <input type="email" id="adminEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Action</label>
+                    <select id="adminAction" style="width:100%; padding:10px; border-radius:var(--radius); border:1px solid var(--border);">
+                        <option value="premium">Upgrade to Premium</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                        <option value="free">Free Trial</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn" style="width:100%">Update User</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header>
+        <div class="container">
+            <nav>
+                <div class="logo">ImageNest</div>
+                <ul class="nav-links">
+                    <li><a href="#" onclick="navigate('home')">Home</a></li>
+                    <li><a href="#" onclick="navigate('pricing')">Pricing</a></li>
+                    <li id="navDashboard"><a href="#" onclick="navigate('dashboard')">Dashboard</a></li>
+                    <li id="navLogin"><a href="#" onclick="toggleModal('loginModal')">Login</a></li>
+                    <li id="navRegister" class="hidden"><a href="#" onclick="toggleModal('registerModal')" class="btn">Get Started</a></li>
+                    <li id="navLogout" class="hidden"><a href="#" onclick="logout()">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main id="mainContent">
+        
+        <!-- PAGE: HOME -->
+        <section id="homePage">
+            <div class="hero">
+                <div class="container">
+                    <h1>Create Sell-Ready PNG Images in Minutes</h1>
+                    <p>ImageNest helps digital sellers create sell-ready PNG images for marketplaces like PNGTree, Etsy, and Creative Market — without manual setup.</p>
+                    <button onclick="handleCtaClick()" class="btn">Start 3-Day Free Trial</button>
+                </div>
+            </div>
+
+            <!-- ANIMATIONS -->
+            <div class="container showcase">
+                <!-- 1. Fetch Prompt -->
+                <div class="window-pane">
+                    <div class="window-header"><div class="window-dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div><div class="window-title">Prompt Fetcher</div></div>
+                    <div class="window-body">
+                        <button style="background:var(--primary); border:none; padding:8px 15px; color:white; border-radius:4px; font-size:0.8rem;"><i class="fas fa-download"></i> Fetch Prompts</button>
+                        <div class="ai-cursor cursor-1"><i class="fas fa-arrow-pointer"></i></div>
+                        <div class="prompt-list">
+                            <div class="prompt-item">Cyberpunk city street...</div>
+                            <div class="prompt-item">Cute robot watering flowers...</div>
+                            <div class="prompt-item">Abstract neon fluid...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. ImageFX Generator -->
+                <div class="window-pane">
+                    <div class="window-header"><div class="window-dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div><div class="window-title">ImageFX Generator</div></div>
+                    <div class="window-body">
+                        <div class="imgfx-panel">
+                            <div class="fx-input-area">
+                                <div class="fx-input"></div>
+                                <button class="fx-btn">Generate</button>
+                            </div>
+                            <div class="fx-grid"><div class="fx-img"></div><div class="fx-img"></div><div class="fx-img"></div><div class="fx-img"></div><div class="fx-img"></div><div class="fx-img"></div></div>
+                        </div>
+                        <div class="ai-cursor cursor-2"><i class="fas fa-arrow-pointer"></i></div>
+                    </div>
+                </div>
+
+                <!-- 3. Chatbot -->
+                <div class="window-pane">
+                    <div class="window-header"><div class="window-dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div><div class="window-title">Auto-Chat</div></div>
+                    <div class="window-body">
+                        <div class="chat-container" style="display:flex; flex-direction:column; gap:10px;">
+                            <div class="msg bot" style="padding:8px 12px; border-radius:12px; background:#F1F5F9; color:#333; max-width:80%;">Hello! I need a logo.</div>
+                            <div class="msg user" style="padding:8px 12px; border-radius:12px; background:var(--primary); color:#fff; max-width:80%; align-self:flex-end;">Sure, what style?</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Pngtree Drag & Drop -->
+                <div class="window-pane">
+                    <div class="coming-soon-tag">COMING SOON</div>
+                    <div class="window-header"><div class="window-dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div><div class="window-title">Pngtree Uploader</div></div>
+                    <div class="window-body">
+                        <div class="drag-workspace">
+                            <div class="folder-area"><i class="fas fa-folder folder-icon"></i><div class="draggable-img d1"></div></div>
+                            <div class="drop-zone"><i class="fas fa-tree tree-logo"></i><span style="font-size:0.7rem; font-weight:600; text-transform:uppercase;">Upload</span></div>
+                        </div>
+                        <div class="earnings-popup"><i class="fas fa-dollar-sign"></i> 200</div>
+                        <div class="ai-cursor cursor-drag"><i class="fas fa-arrow-pointer"></i></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FEATURES SECTION -->
+            <div class="container features-section">
+                <div class="feature-grid">
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="fas fa-magic"></i></div>
+                        <div class="feature-text"><h3>No prompt writing required</h3><p>Automated fetching of trending keywords.</p></div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="fas fa-sliders-h"></i></div>
+                        <div class="feature-text"><h3>No manual image setup</h3><p>One-click resizing and formatting.</p></div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="fas fa-store"></i></div>
+                        <div class="feature-text"><h3>Built for sellers</h3><p>Optimized for PNGTree, Etsy, and Creative Market.</p></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PAGE: PRICING -->
+        <section id="pricingPage" class="hidden">
+            <div class="container pricing">
+                <h2 class="text-center" style="margin-bottom: 40px;">Simple Pricing</h2>
+                <div class="pricing-grid">
+                    <div class="pricing-card">
+                        <h3>Monthly Plan</h3>
+                        <div style="font-size: 2rem; font-weight: 800; margin: 10px 0;">$30 <span style="font-size: 1rem; color: #64748B;">/ mo</span></div>
+                        <div class="pricing-desc">
+                            Simple monthly access. Cancel anytime.<br>
+                            No complicated setup. No learning curve.
+                        </div>
+                        <div class="payment-details">
+                            <p><strong>Pay via WhatsApp:</strong></p>
+                            <button onclick="payWhatsApp()" class="btn btn-whatsapp mb-2" style="width:100%"><i class="fab fa-whatsapp"></i> Buy Now</button>
+                            <hr style="margin: 10px 0; border:0; border-top:1px solid #ddd;">
+                            <p style="font-weight:bold;">JazzCash: 0300-1234567</p>
+                            <p style="font-weight:bold;">EasyPaisa: 0321-7654321</p>
+                        </div>
+                    </div>
+                    
+                    <div class="pricing-card">
+                        <h3>Yearly Plan</h3>
+                        <div style="font-size: 2rem; font-weight: 800; margin: 10px 0;">$200 <span style="font-size: 1rem; color: #64748B;">/ yr</span></div>
+                        <div class="pricing-desc">
+                            Best value for serious sellers.<br>
+                            Full access to all automation features.
+                        </div>
+                         <button onclick="payWhatsApp()" class="btn btn-outline" style="width:100%">Contact Sales</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PAGE: DASHBOARD -->
+        <section id="dashboardPage" class="hidden">
+            <div class="container dashboard-container">
+                <div class="dash-grid">
+                    <aside class="sidebar">
+                        <div class="text-center mb-2">
+                            <div style="width:60px; height:60px; background:#e2e8f0; border-radius:50%; margin:0 auto 10px; display:flex; align-items:center; justify-content:center;"><i class="fas fa-user fa-2x"></i></div>
+                            <h4 id="dashUserName">User Name</h4>
+                            <small id="dashUserEmail" style="color:var(--text-muted)">user@example.com</small>
+                        </div>
+                        <ul>
+                            <li class="active"><i class="fas fa-home"></i> Overview</li>
+                            <li><i class="fas fa-key"></i> License Key</li>
+                        </ul>
+                    </aside>
+
+                    <div class="dash-content">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h2>Dashboard</h2>
+                            <span id="subStatusBadge" class="status-badge status-active">Trial Active</span>
+                        </div>
+                        <hr style="margin:20px 0; border:0; border-top:1px solid #eee;">
+                        
+                        <div style="background:#eff6ff; padding:20px; border-radius:var(--radius); border-left:4px solid var(--primary);">
+                            <h4>Software Download</h4>
+                            <p>Download Windows application and use your license key to activate.</p>
+                            
+                            <!-- DOWNLOAD BUTTON UPDATED -->
+                            <a id="downloadExeLink" href="https://drive.google.com/uc?export=download&id=1R_vhqqV4PqY00VdVTI7upIt_MpXAq3Qc" target="_blank" class="btn mt-2" style="display:inline-flex; align-items:center; gap:10px; margin-top:15px;">
+                                <i class="fas fa-download"></i> Download ImageNest Software
+                            </a>
+                        </div>
+
+                        <div style="margin-top:30px;">
+                            <h4>License Key</h4>
+                            <p>Copy this key into software after installation.</p>
+                            <div class="license-box" id="licenseKeyDisplay">LOADING...</div>
+                            <button onclick="copyLicense()" class="btn btn-outline" style="font-size:0.9rem; padding: 8px 16px;"><i class="fas fa-copy"></i> Copy Key</button>
+                        </div>
+
+                        <div style="margin-top:30px;">
+                            <h4>Subscription Details</h4>
+                            <p><strong>Plan:</strong> <span id="planName">Free Trial</span></p>
+                            <p><strong>Expires On:</strong> <span id="expiryDate">Calculating...</span></p>
+                            <button id="upgradeBtn" onclick="navigate('pricing')" class="btn" style="margin-top:15px;">Upgrade Plan</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="container">
+            <div class="text-center">
+                <h3>ImageNest</h3>
+                <p style="font-size:0.9rem; color:#94a3b8; margin-top:10px;">Automate your digital image business.</p>
+                <div style="margin-top:20px;">
+                    <a href="#" style="color:#94a3b8; margin:0 10px;">Privacy</a>
+                    <a href="#" style="color:#94a3b8; margin:0 10px;">Terms</a>
+                </div>
+                <span class="admin-link" onclick="toggleModal('adminModal')">[Admin Demo]</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- FIREBASE CONFIGURATION ---
+        // Your Database URL is connected here. 
+        // Note: We use the Client SDK, not the Java Admin Service Account.
+        const firebaseConfig = {
+            databaseURL: "https://image-nest-default-rtdb.firebaseio.com"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // --- LOCAL STORAGE KEYS ---
+        const SESSION_KEY = 'imagenest_session';
+        const DEVICE_ID_KEY = 'imagenest_device';
+
+        // --- UTILS ---
+        function getDeviceId() {
+            let did = localStorage.getItem(DEVICE_ID_KEY);
+            if (!did) { 
+                did = 'dev-' + Math.random().toString(36).substr(2, 9); 
+                localStorage.setItem(DEVICE_ID_KEY, did); 
+            }
+            return did;
+        }
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        function toggleModal(id) {
+            const modal = document.getElementById(id);
+            if (modal.classList.contains('open')) modal.classList.remove('open');
+            else modal.classList.add('open');
+        }
+
+        // --- FIREBASE FUNCTIONS ---
+
+        // Register User to Firebase
+        async function registerUserToFirebase(user) {
+            try {
+                // We store user in 'users' collection. We use push() to get unique ID, 
+                // but for easy login, we will also store email-keyed data or search manually.
+                // For this demo, let's store it and then read it back to login.
+                const newUserRef = db.ref('users').push();
+                await newUserRef.set(user);
+                return true;
+            } catch (error) {
+                console.error("Firebase Error:", error);
+                return false;
+            }
+        }
+
+        // Get User from Firebase by Email
+        function getUserFromFirebase(email) {
+            return db.ref('users').orderByChild('email').equalTo(email).once('value');
+        }
+
+        // Update User Plan in Firebase
+        async function updateUserPlanInFirebase(email, newPlan) {
+            // 1. Find the user
+            const snapshot = await getUserFromFirebase(email);
+            if (snapshot.exists()) {
+                // 2. Get the key (Firebase unique ID)
+                const userData = snapshot.val();
+                const key = Object.keys(userData)[0];
+                // 3. Update the plan
+                await db.ref('users/' + key).update({ plan: newPlan });
+                return true;
+            }
+            return false;
+        }
+
+        // --- AUTH LOGIC ---
+        function setCurrentUser(email) {
+            localStorage.setItem(SESSION_KEY, email);
+            updateUI();
+        }
+        function logout() {
+            localStorage.removeItem(SESSION_KEY);
+            navigate('home');
+            updateUI();
+            showToast('Logged out');
+        }
+
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const name = document.getElementById('regName').value;
+            const email = document.getElementById('regEmail').value;
+            const pass = document.getElementById('regPass').value;
+            const deviceId = getDeviceId();
+
+            // Check if user already exists in Firebase
+            const snapshot = await getUserFromFirebase(email);
+            if (snapshot.exists()) {
+                showToast('Email already registered!');
+                return;
+            }
+
+            const newUser = { 
+                name, email, pass, deviceId, 
+                plan: 'free', 
+                registeredAt: Date.now(), 
+                licenseKey: 'IMG-' + Math.random().toString(36).substr(2, 6).toUpperCase() 
+            };
+
+            // Save to Firebase
+            const success = await registerUserToFirebase(newUser);
+            if(success) {
+                setCurrentUser(email);
+                toggleModal('registerModal');
+                navigate('dashboard');
+                showToast('Trial Started! Saved to Firebase.');
+            } else {
+                showToast('Error saving to database.');
+            }
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const pass = document.getElementById('loginPass').value;
+            
+            const snapshot = await getUserFromFirebase(email);
+            if (snapshot.exists()) {
+                const userData = Object.values(snapshot.val())[0]; // Get first match
+                if (userData.pass === pass) {
+                    setCurrentUser(email);
+                    toggleModal('loginModal');
+                    navigate('dashboard');
+                    showToast('Login Successful');
+                } else {
+                    showToast('Wrong Password');
+                }
+            } else {
+                showToast('User not found.');
+            }
+        });
+
+        // --- ADMIN LOGIC ---
+        document.getElementById('adminForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('adminEmail').value;
+            const action = document.getElementById('adminAction').value;
+            
+            const success = await updateUserPlanInFirebase(email, action);
+            if (success) {
+                showToast(`Updated ${email} to ${action}`);
+                toggleModal('adminModal');
+                // Refresh current user if admin updated themselves
+                if(localStorage.getItem(SESSION_KEY) === email) {
+                    loadUserForDashboard(email);
+                }
+            } else {
+                showToast('User not found.');
+            }
+        });
+
+        // --- UI FUNCTIONS ---
+        async function loadUserForDashboard(email) {
+            const snapshot = await getUserFromFirebase(email);
+            if (snapshot.exists()) {
+                const user = Object.values(snapshot.val())[0];
+                updateDashboardUI(user);
+            }
+        }
+
+        function navigate(pageId) {
+            document.getElementById('homePage').classList.add('hidden');
+            document.getElementById('pricingPage').classList.add('hidden');
+            document.getElementById('dashboardPage').classList.add('hidden');
+
+            if (pageId === 'home') document.getElementById('homePage').classList.remove('hidden');
+            if (pageId === 'pricing') document.getElementById('pricingPage').classList.remove('hidden');
+            if (pageId === 'dashboard') {
+                const email = localStorage.getItem(SESSION_KEY);
+                if (!email) { toggleModal('loginModal'); return; }
+                
+                // Load user data from Firebase to display in dashboard
+                loadUserForDashboard(email);
+                document.getElementById('dashboardPage').classList.remove('hidden');
+            }
+            window.scrollTo(0, 0);
+        }
+
+        function updateUI() {
+            const email = localStorage.getItem(SESSION_KEY);
+            const isLoggedIn = !!email;
+            
+            document.getElementById('navLogin').style.display = isLoggedIn ? 'none' : 'block';
+            document.getElementById('navRegister').style.display = isLoggedIn ? 'none' : 'block';
+            document.getElementById('navLogout').style.display = isLoggedIn ? 'block' : 'none';
+            document.getElementById('navDashboard').style.display = isLoggedIn ? 'block' : 'none';
+        }
+
+        function updateDashboardUI(user) {
+            document.getElementById('dashUserName').textContent = user.name;
+            document.getElementById('dashUserEmail').textContent = user.email;
+            document.getElementById('licenseKeyDisplay').textContent = user.licenseKey;
+            
+            const statusBadge = document.getElementById('subStatusBadge');
+            const planName = document.getElementById('planName');
+            const expiryDate = document.getElementById('expiryDate');
+            
+            planName.textContent = user.plan === 'free' ? 'Free Trial (3 Days)' : 'Premium Plan';
+            expiryDate.textContent = user.plan === 'free' ? new Date(user.registeredAt + 3*24*60*60*1000).toLocaleDateString() : 'Active';
+            
+            statusBadge.className = 'status-badge ' + (user.plan === 'free' ? 'status-active' : 'status-active'); 
+        }
+
+        function copyLicense() {
+            navigator.clipboard.writeText(document.getElementById('licenseKeyDisplay').textContent);
+            showToast('License Copied!');
+        }
+
+        function payWhatsApp() {
+            window.open(`https://wa.me/923299166785?text=${encodeURIComponent("I want to buy ImageNest Premium.")}`, '_blank');
+        }
+
+        function handleCtaClick() {
+            if(localStorage.getItem(SESSION_KEY)) navigate('dashboard');
+            else toggleModal('registerModal');
+        }
+
+        window.onload = function() { updateUI(); };
+    </script>
+</body>
+</html>
